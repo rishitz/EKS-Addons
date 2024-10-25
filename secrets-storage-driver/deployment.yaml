@@ -1,0 +1,86 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: 12-example
+  
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: myapp-aws-secrets
+  namespace: 12-example
+spec:
+  provider: aws
+  parameters:
+    region: us-east-2
+    objects: |
+      - objectName: staging/myapp-secret-v4
+        objectType: secretsmanager
+        jmesPath:
+            - path: username
+              objectAlias: myusername
+            - path: password
+              objectAlias: mypassword
+  secretObjects:
+    - secretName: myapp-k8s-secret
+      type: Opaque
+      data:
+        - objectName: myusername
+          key: k8s-myusername
+        - objectName: mypassword
+          key: k8s-mypassword
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: myapp
+  namespace: 12-example
+  annotations:
+    eks.amazonaws.com/role-arn: <Role-arn>
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  namespace: 12-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      serviceAccountName: myapp
+      containers:
+        - name: myapp
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: secrets
+              mountPath: /mnt/secrets
+              readOnly: true
+          env:
+            - name: MY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: myapp-k8s-secret
+                  key: k8s-myusername
+            - name: MY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myapp-k8s-secret
+                  key: k8s-mypassword
+      volumes:
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: myapp-aws-secrets

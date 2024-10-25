@@ -60,6 +60,7 @@ spec:
 
 ```
 spec:
+serviceAccount: <Name of SA>
 volumes:
   - name: db-cred
     csi:
@@ -67,5 +68,19 @@ volumes:
       readOnly: true
       volumeAttributes:
         secretProviderClass: "db-aws-secrets"
+containers:
+- name: nginx
+  image: nginx
+  volumeMounts:
+    - name: db-cred
+      mountPath: /tmp
 
+```
+
+## Rotate Secrets:
+Sync up the latest secrets from aws secret manager
+
+```
+helm show valuee <chart-name> >> values.yaml
+enableSecretRotation: true
 ```
